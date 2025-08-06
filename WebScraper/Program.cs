@@ -51,14 +51,19 @@ foreach (var link in rawLinks)
     }
 }
 
+var sl = results.Count;
+Console.WriteLine($"\n🔢 Tổng số nhóm tìm được: {sl}");
+
+int index = 1; // ✅ Di chuyển ra ngoài
+
 // 👉 Bước 2: Duyệt từng nhóm và bấm nút "Tham gia"
 foreach (var (name, url) in results)
 {
     try
     {
-        Console.WriteLine($"\n🔗 Mở nhóm: {name}");
+        Console.WriteLine($"\n🔗 [{index}/{sl}] Mở nhóm: {name}");
         driver.Navigate().GoToUrl(url);
-        Thread.Sleep(5000);
+        Thread.Sleep(3000);
 
         try
         {
@@ -69,19 +74,23 @@ foreach (var (name, url) in results)
                 Thread.Sleep(1000);
                 ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].click();", joinBtn);
                 Console.WriteLine("✅ Đã bấm nút 'Tham gia'");
-                Thread.Sleep(3000);
             }
         }
         catch (NoSuchElementException)
         {
             Console.WriteLine("⚠️ Không thấy nút 'Tham gia'");
         }
+
+        Console.WriteLine($"🔄 Đã xử lý {index}/{sl} nhóm");
+        index++;
     }
     catch (Exception ex)
     {
         Console.WriteLine($"❌ Lỗi khi xử lý nhóm {name}: {ex.Message}");
+        index++; // vẫn tăng index nếu lỗi để không bị sai vị trí
     }
 }
+
 
 // Xuất Excel
 var workbook = new XLWorkbook();
