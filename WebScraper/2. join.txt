@@ -1,0 +1,118 @@
+﻿using ClosedXML.Excel;
+using OpenQA.Selenium;
+using OpenQA.Selenium.Chrome;
+using OpenQA.Selenium.Interactions;
+using System.Text;
+
+// Hiển thị Unicode (chữ tiếng Việt)
+Console.OutputEncoding = Encoding.UTF8;
+
+// ✅ Nhập từ khóa tìm kiếm
+string keyword = "Tân Phú";
+Console.WriteLine($"Nhập từ khóa tìm kiếm nhóm Facebook: {keyword}");
+
+// ✅ Cấu hình Chrome đăng nhập sẵn
+string userDataDir = @"C:\SeleniumProfiles\MyProfile";
+string profileDir = "Default";
+
+var options = new ChromeOptions();
+options.AddArgument($"--user-data-dir={userDataDir}");
+options.AddArgument($"--profile-directory={profileDir}");
+options.AddArgument("--start-maximized");
+options.AddArgument("--disable-blink-features=AutomationControlled");
+options.AddExcludedArgument("enable-automation");
+options.AddAdditionalOption("useAutomationExtension", false);
+
+using var driver = new ChromeDriver(options);
+
+// ✅ Truy cập trang tìm kiếm nhóm
+string searchUrl = $"https://www.facebook.com/search/groups?q={Uri.EscapeDataString(keyword)}";
+driver.Navigate().GoToUrl(searchUrl);
+Thread.Sleep(5000); // chờ trang load
+
+// ✅ Cuộn xuống để tải thêm kết quả
+for (int i = 0; i < 10; i++)
+{
+    ((IJavaScriptExecutor)driver).ExecuteScript("window.scrollTo(0, document.body.scrollHeight);");
+    Thread.Sleep(1000);
+}
+
+// ✅ Tìm các nhóm
+var groupLinks = driver.FindElements(By.XPath("//a[contains(@href, '/groups/')]"));
+var results = new HashSet<(string name, string url)>();
+
+foreach (var link in groupLinks)
+{
+    try
+    {
+        string href = link.GetAttribute("href");
+        string name = link.Text.Trim();
+
+        if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(href))
+        {
+            // Kiểm tra tránh lặp nhóm
+            if (!results.Any(x => x.url == href))
+            {
+                results.Add((name, href));
+                Console.WriteLine($"{name} - {href}");
+
+                var joinButtons = driver.FindElements(By.XPath("//span[text()='Tham gia']"));
+                Console.WriteLine($"\n🔍 Tìm thấy {joinButtons.Count} nút 'Tham gia'");
+
+                foreach (var join in joinButtons)
+                {
+                    try
+                    {
+                        ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", join);
+                        Thread.Sleep(1000);
+
+                        // Nhấn ESC để đóng menu nếu có
+                        new Actions(driver).SendKeys(Keys.Escape).Perform();
+                        Thread.Sleep(500);
+
+                        // Click bằng JavaScript để tránh bị chặn
+                        ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].click();", join);
+                        Console.WriteLine("✅ Đã bấm nút 'Tham gia'");
+                        Thread.Sleep(3000);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"⚠️ Lỗi khi bấm nút 'Tham gia': {ex.Message}");
+                    }
+                }
+
+
+            }
+        }
+    }
+    
+    catch
+    {
+        continue;
+    }
+}
+
+// ✅ Ghi ra file Excel
+var workbook = new XLWorkbook();
+var worksheet = workbook.Worksheets.Add("Facebook Groups");
+
+// Tiêu đề cột
+worksheet.Cell(1, 1).Value = "Tên nhóm";
+worksheet.Cell(1, 2).Value = "Link nhóm";
+
+// Ghi dữ liệu
+int row = 2;
+foreach (var (name, url) in results)
+{
+    worksheet.Cell(row, 1).Value = name;
+    worksheet.Cell(row, 2).Value = url;
+    row++;
+}
+
+// ✅ Lưu file
+string filePath = $"FacebookGroups_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+workbook.SaveAs(filePath);
+
+Console.WriteLine($"\n📁 Đã lưu kết quả vào file: {filePath}");
+driver.Quit();
+Console.WriteLine("\n✅ Hoàn tất.");
